@@ -3,6 +3,9 @@ apk/
 captures/
 *.har
 
+# Local-only notes
+brands/README.md
+
 # Local agent state
 .claude/
 

@@ -3,9 +3,6 @@ apk/
 captures/
 *.har
 
-# Brand assets — submitted upstream to home-assistant/brands
-brands/
-
 # Local agent state
 .claude/
 

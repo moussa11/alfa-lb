@@ -3,8 +3,8 @@ apk/
 captures/
 *.har
 
-# Local-only notes
-brands/README.md
+# Brand assets — submitted upstream to home-assistant/brands
+brands/
 
 # Local agent state
 .claude/

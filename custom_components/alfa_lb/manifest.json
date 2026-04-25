@@ -8,5 +8,5 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/moussa11/alfa-lb/issues",
   "requirements": ["pycryptodome>=3.20.0"],
-  "version": "0.2.0"
+  "version": "0.2.1"
 }

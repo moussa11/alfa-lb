@@ -1,0 +1,22 @@
+# Reverse-engineering artefacts and captured sessions — never commit
+apk/
+captures/
+*.har
+
+# Local agent state
+.claude/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Editors
+.idea/
+.vscode/
+*.swp

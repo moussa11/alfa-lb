@@ -1,0 +1,42 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Alfa Lebanon",
+        "description": "Log in to alfa.com.lb in your browser. Open DevTools → Network → click any request to /en/account/getconsumption. In the Headers panel, copy the full value of the Cookie request header and paste it below.",
+        "data": {
+          "cookie": "Cookie header value"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Alfa",
+        "description": "Your Alfa session expired. Re-paste the Cookie header from a fresh logged-in browser session.",
+        "data": {
+          "cookie": "Cookie header value"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Cookie was rejected by Alfa. Make sure you copied the full Cookie header from a logged-in session.",
+      "cannot_connect": "Cannot reach Alfa servers",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This Alfa account is already configured",
+      "reauth_successful": "Re-authentication successful"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "balance": { "name": "Balance" },
+      "data_used": { "name": "Data used" },
+      "data_total": { "name": "Data total" },
+      "data_remaining": { "name": "Data remaining" },
+      "plan": { "name": "Plan" },
+      "validity": { "name": "Plan validity" },
+      "days_until_expiry": { "name": "Days until expiry" },
+      "last_recharge_amount": { "name": "Last recharge amount" },
+      "last_recharge_date": { "name": "Last recharge date" }
+    }
+  }
+}

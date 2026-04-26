@@ -58,12 +58,14 @@ def _decrypt(ciphertext: str) -> str:
     return unpad(cipher.decrypt(base64.b64decode(ciphertext)), 16).decode()
 
 
-def _parse_money(raw: str | None) -> float | None:
-    """`"$ 63.05"` → ``63.05``."""
-    if not raw:
+def _parse_money(raw: Any) -> float | None:
+    """`"$ 63.05"` → ``63.05``. Bare numbers pass through."""
+    if raw is None or raw == "":
         return None
+    if isinstance(raw, (int, float)):
+        return float(raw)
     import re
-    m = re.search(r"-?\d+(?:\.\d+)?", raw)
+    m = re.search(r"-?\d+(?:\.\d+)?", str(raw))
     return float(m.group(0)) if m else None
 
 
@@ -231,6 +233,7 @@ class AlfaClient:
             "services": [],
             "last_recharge_amount": None,
             "last_recharge_date": None,
+            "recharge_history": [],
             "days_until_expiry": None,
             "data_used_mb": None,
             "data_total_mb": None,
@@ -281,19 +284,23 @@ class AlfaClient:
             else None
         )
 
-        # Last recharge — newest first.
-        recharges = recharge.get("MSISDNRecharges") or []
-        if recharges:
-            top = recharges[0]
-            try:
-                amt = top.get("Amount")
-                result["last_recharge_amount"] = float(amt) if amt is not None else None
-            except (TypeError, ValueError):
-                pass
-            d = _parse_dmy(top.get("TimeStamp"))
-            if d:
+        # Recharge history — newest first.
+        history: list[dict[str, Any]] = []
+        for item in recharge.get("MSISDNRecharges") or []:
+            d = _parse_dmy(item.get("TimeStamp"))
+            history.append({
+                "date": d.isoformat() if d else None,
+                "amount": _parse_money(item.get("Amount")),
+                "balance_before": _parse_money(item.get("BalanceB")),
+                "balance_after": _parse_money(item.get("BalanceA")),
+                "account": item.get("AccountNumber"),
+            })
+        result["recharge_history"] = history
+        if history:
+            result["last_recharge_amount"] = history[0]["amount"]
+            if history[0]["date"]:
                 result["last_recharge_date"] = datetime.combine(
-                    d, datetime.min.time()
+                    date.fromisoformat(history[0]["date"]), datetime.min.time()
                 ).astimezone()
 
         # Days until expiry — derive from PrepaidExpiryDate (DD/MM/YYYY).

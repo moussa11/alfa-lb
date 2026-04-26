@@ -84,6 +84,10 @@ def _parse_dmy(raw: str | None) -> date | None:
 
 
 def _to_mb(value: str | None, unit: str | None) -> float | None:
+    """Normalise to decimal MB so HA's MEGABYTES/GIGABYTES conversion (/1000)
+    yields the same GB number the Alfa app shows. The operator labels plans in
+    decimal GB even though their internal accounting uses 1024-MB; matching the
+    user-visible label is the right UX call."""
     if value is None:
         return None
     try:
@@ -92,9 +96,9 @@ def _to_mb(value: str | None, unit: str | None) -> float | None:
         return None
     u = (unit or "").upper()
     if u == "GB":
-        return num * 1024
+        return num * 1000
     if u == "KB":
-        return num / 1024
+        return num / 1000
     return num
 
 

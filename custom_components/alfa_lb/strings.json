@@ -30,11 +30,13 @@
   "entity": {
     "sensor": {
       "balance": { "name": "Balance" },
-      "data_used": { "name": "Data used" },
-      "data_total": { "name": "Data total" },
-      "data_remaining": { "name": "Data remaining" },
-      "plan": { "name": "Plan" },
-      "validity": { "name": "Plan validity" },
+      "data_used": { "name": "Data used (active plan)" },
+      "data_total": { "name": "Data total (active plan)" },
+      "data_remaining": { "name": "Data remaining (active plan)" },
+      "data_remaining_total": { "name": "Data remaining (all plans)" },
+      "plan": { "name": "Active plan" },
+      "plans": { "name": "Active plans" },
+      "validity": { "name": "Active plan validity" },
       "days_until_expiry": { "name": "Days until expiry" },
       "last_recharge_amount": { "name": "Last recharge amount" },
       "last_recharge_date": { "name": "Last recharge date" }

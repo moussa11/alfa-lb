@@ -71,11 +71,21 @@ def _parse_money(raw: Any) -> float | None:
     return float(m.group(0)) if m else None
 
 
-def _parse_dmy(raw: str | None) -> date | None:
-    """`"19/05/2026"` → ``date(2026, 5, 19)``."""
+def _parse_date(raw: str | None) -> date | None:
+    """Parse Alfa's date strings.
+
+    Handles ISO ``YYYY-MM-DD`` (plan ``ValidityDateValue`` as of app 5.3.x)
+    and ``DD/MM/YYYY`` (``PrepaidExpiryDate`` and recharge ``TimeStamp``).
+    """
     if not raw:
         return None
-    parts = raw.strip().split("/")
+    raw = raw.strip()
+    if "-" in raw:
+        try:
+            return date.fromisoformat(raw[:10])
+        except ValueError:
+            return None
+    parts = raw.split("/")
     if len(parts) != 3:
         return None
     try:
@@ -249,6 +259,8 @@ class AlfaClient:
             "balance_raw": details.get("CurrentBalanceValue"),
             "response_code": details.get("Status"),
             "services": [],
+            "plans": [],
+            "plan_count": 0,
             "last_recharge_amount": None,
             "last_recharge_date": None,
             "recharge_history": [],
@@ -256,56 +268,89 @@ class AlfaClient:
             "data_used_mb": None,
             "data_total_mb": None,
             "data_remaining_mb": None,
+            "data_remaining_total_mb": None,
             "plan_name": None,
             "validity": None,
         }
 
-        primary_used: float | None = None
-        primary_total: float | None = None
-        primary_validity: date | None = None
-        primary_plan: str | None = None
-
+        # Each ServiceInformationValue is one subscribed plan (Alfa now allows
+        # several stacked data plans, no auto-renewal). Collect them all.
+        plans: list[dict[str, Any]] = []
         for svc in details.get("ServiceInformationValue") or []:
             name = svc.get("ServiceNameValue")
             for det in svc.get("ServiceDetailsInformationValue") or []:
                 used = _to_mb(det.get("ConsumptionValue"), det.get("ConsumptionUnitValue"))
                 total = _to_mb(det.get("PackageValue"), det.get("PackageUnitValue"))
-                validity = _parse_dmy(det.get("ValidityDateValue"))
-                entry = {
+                validity = _parse_date(det.get("ValidityDateValue"))
+                remaining = (
+                    max(total - used, 0.0)
+                    if used is not None and total is not None
+                    else None
+                )
+                plans.append({
                     "service": name,
                     "description": det.get("DescriptionValue"),
                     "used_mb": used,
                     "total_mb": total,
-                    "remaining_mb": (
-                        total - used if used is not None and total is not None else None
-                    ),
-                    "validity": validity.isoformat() if validity else None,
-                }
-                result["services"].append(entry)
-                if primary_used is None and used is not None and total is not None:
-                    primary_used = used
-                    primary_total = total
-                    primary_validity = validity
-                    primary_plan = name or det.get("DescriptionValue")
+                    "remaining_mb": remaining,
+                    "validity": validity,
+                })
 
-        result["data_used_mb"] = primary_used
-        result["data_total_mb"] = primary_total
-        result["data_remaining_mb"] = (
-            (primary_total - primary_used)
-            if primary_used is not None and primary_total is not None
+        # Order by expiry, soonest first (undated last).
+        plans.sort(key=lambda p: p["validity"] or date.max)
+
+        # back-compat: ISO-string services list
+        result["services"] = [
+            {**p, "validity": p["validity"].isoformat() if p["validity"] else None}
+            for p in plans
+        ]
+        result["plan_count"] = len(plans)
+
+        # "Primary" = the active plan you're burning down now: the soonest-
+        # expiring plan that still has data left; else soonest-expiring overall.
+        with_data = [p for p in plans if p["remaining_mb"] and p["validity"]]
+        dated = [p for p in plans if p["validity"]]
+        primary = (
+            with_data[0] if with_data
+            else dated[0] if dated
+            else plans[0] if plans
             else None
         )
-        result["plan_name"] = primary_plan
-        result["validity"] = (
-            datetime.combine(primary_validity, datetime.min.time()).astimezone()
-            if primary_validity
-            else None
-        )
+        if primary:
+            result["data_used_mb"] = primary["used_mb"]
+            result["data_total_mb"] = primary["total_mb"]
+            result["data_remaining_mb"] = primary["remaining_mb"]
+            result["plan_name"] = primary["service"] or primary["description"]
+            result["validity"] = (
+                datetime.combine(primary["validity"], datetime.min.time()).astimezone()
+                if primary["validity"]
+                else None
+            )
+
+        # Aggregate data available across every plan.
+        rem = [p["remaining_mb"] for p in plans if p["remaining_mb"] is not None]
+        result["data_remaining_total_mb"] = sum(rem) if rem else None
+
+        # Attribute-friendly per-plan list (GB + days-left), soonest expiry first.
+        today = date.today()
+        result["plans"] = [
+            {
+                "name": p["service"],
+                "used_gb": round(p["used_mb"] / 1000, 2) if p["used_mb"] is not None else None,
+                "total_gb": round(p["total_mb"] / 1000, 2) if p["total_mb"] is not None else None,
+                "remaining_gb": (
+                    round(p["remaining_mb"] / 1000, 2) if p["remaining_mb"] is not None else None
+                ),
+                "validity": p["validity"].isoformat() if p["validity"] else None,
+                "days_left": (p["validity"] - today).days if p["validity"] else None,
+            }
+            for p in plans
+        ]
 
         # Recharge history — newest first.
         history: list[dict[str, Any]] = []
         for item in recharge.get("MSISDNRecharges") or []:
-            d = _parse_dmy(item.get("TimeStamp"))
+            d = _parse_date(item.get("TimeStamp"))
             history.append({
                 "date": d.isoformat() if d else None,
                 "amount": _parse_money(item.get("Amount")),
@@ -322,7 +367,7 @@ class AlfaClient:
                 ).astimezone()
 
         # Days until expiry — derive from PrepaidExpiryDate (DD/MM/YYYY).
-        exp_date = _parse_dmy(expiry.get("PrepaidExpiryDate"))
+        exp_date = _parse_date(expiry.get("PrepaidExpiryDate"))
         if exp_date:
             result["days_until_expiry"] = (exp_date - date.today()).days
 

@@ -1,6 +1,6 @@
 """Alfa Lebanon mobile-API client.
 
-Reverse-engineered from the official Android app (com.apps2you.alfa v5.2.86):
+Reverse-engineered from the official Android app (com.apps2you.alfa v5.3.5):
 all calls POST to ``/V2/Default`` with an AES-256-CBC encrypted JSON body
 wrapped as ``{"Data": "<base64 ciphertext>"}``. The plaintext carries the
 operation name in a ``Method`` field plus a few platform metadata fields.
@@ -23,7 +23,7 @@ from Crypto.Util.Padding import pad, unpad
 
 _LOGGER = logging.getLogger(__name__)
 
-API_URL = "https://wsitranslator-live.alfa.com.lb/V2/Default"
+API_URL = "https://wsitrans-live.alfa.com.lb/V2/Default"
 
 _AES_KEY = b"CXLI1C3iCLHRQk5MH9aDvdYYQfAFlte2"
 _AES_IV = b"t0dmo_999@999---"
@@ -37,7 +37,9 @@ _HEADERS = {
 
 # Status codes returned in the decrypted payload (from the app's StatusCodes).
 _STATUS_OK = {2000, 8081, 8090, 8101}
-_STATUS_AUTH_FAILED = {3000, 3001, 3002, 4000, 4001, 4002}
+# 2004 = "Wrong username or password" (returned in a plaintext {"Error":{...}}
+# wrapper at HTTP 400, not the encrypted envelope).
+_STATUS_AUTH_FAILED = {2004, 3000, 3001, 3002, 4000, 4001, 4002}
 
 
 class AlfaAuthError(Exception):
@@ -131,7 +133,7 @@ class AlfaClient:
             **body,
             "Method": method,
             "Platform": "android",
-            "App_version": "5.2.86",
+            "App_version": "5.3.5",
             "TimeStamp": ts,
             "Signature": f"{random.randint(0, 100)}{ts}",
         }
@@ -147,14 +149,26 @@ class AlfaClient:
                 text = await resp.text()
                 if resp.status >= 500:
                     raise AlfaApiError(f"HTTP {resp.status} from Alfa: {text[:200]}")
-                if resp.status >= 400:
-                    raise AlfaApiError(f"HTTP {resp.status}: {text[:200]}")
                 try:
                     outer = json.loads(text)
                 except ValueError as err:
-                    raise AlfaApiError(f"Bad JSON envelope: {err}") from err
+                    raise AlfaApiError(
+                        f"HTTP {resp.status}, bad JSON envelope: {err}"
+                    ) from err
+                # Errors are returned as a *plaintext* ``{"Error":{"Status":N,
+                # "Message":...}}`` wrapper (typically at HTTP 400), not the
+                # encrypted ``Data`` envelope. Surface the inner Status so the
+                # caller can distinguish auth failures (e.g. 2004) from faults.
                 if isinstance(outer, dict) and outer.get("Error"):
-                    raise AlfaApiError(f"Alfa API error: {outer['Error']}")
+                    inner = outer["Error"]
+                    if isinstance(inner, dict):
+                        return {
+                            "Status": inner.get("Status"),
+                            "Message": inner.get("Message"),
+                        }
+                    raise AlfaApiError(f"Alfa API error: {inner}")
+                if resp.status >= 400:
+                    raise AlfaApiError(f"HTTP {resp.status}: {text[:200]}")
                 data_blob = outer.get("Data") if isinstance(outer, dict) else None
                 if not data_blob:
                     raise AlfaApiError(f"No Data field in response: {text[:200]}")

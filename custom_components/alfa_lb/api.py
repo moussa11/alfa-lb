@@ -265,6 +265,8 @@ class AlfaClient:
             "last_recharge_date": None,
             "recharge_history": [],
             "days_until_expiry": None,
+            "line_expiry": None,
+            "plan_days_left": None,
             "data_used_mb": None,
             "data_total_mb": None,
             "data_remaining_mb": None,
@@ -326,6 +328,8 @@ class AlfaClient:
                 if primary["validity"]
                 else None
             )
+            if primary["validity"]:
+                result["plan_days_left"] = (primary["validity"] - date.today()).days
 
         # Aggregate data available across every plan.
         rem = [p["remaining_mb"] for p in plans if p["remaining_mb"] is not None]
@@ -366,9 +370,11 @@ class AlfaClient:
                     date.fromisoformat(history[0]["date"]), datetime.min.time()
                 ).astimezone()
 
-        # Days until expiry — derive from PrepaidExpiryDate (DD/MM/YYYY).
+        # SIM line (prepaid account) validity, from PrepaidExpiryDate (DD/MM/YYYY).
+        # This is NOT the data plan's expiry; that is "validity" / "plan_days_left".
         exp_date = _parse_date(expiry.get("PrepaidExpiryDate"))
         if exp_date:
             result["days_until_expiry"] = (exp_date - date.today()).days
+            result["line_expiry"] = exp_date.isoformat()
 
         return result

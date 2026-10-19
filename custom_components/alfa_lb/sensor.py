@@ -108,6 +108,15 @@ SENSORS: tuple[AlfaSensorEntityDescription, ...] = (
         native_unit_of_measurement="d",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda d: d.get("days_until_expiry"),
+        attrs_fn=lambda d: {"line_expiry": d.get("line_expiry")},
+    ),
+    AlfaSensorEntityDescription(
+        key="plan_days_left",
+        translation_key="plan_days_left",
+        icon="mdi:timer-sand",
+        native_unit_of_measurement="d",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: d.get("plan_days_left"),
     ),
     AlfaSensorEntityDescription(
         key="last_recharge_amount",

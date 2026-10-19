@@ -37,7 +37,8 @@
       "plan": { "name": "Active plan" },
       "plans": { "name": "Active plans" },
       "validity": { "name": "Active plan validity" },
-      "days_until_expiry": { "name": "Days until expiry" },
+      "days_until_expiry": { "name": "Line validity days left" },
+      "plan_days_left": { "name": "Plan days left" },
       "last_recharge_amount": { "name": "Last recharge amount" },
       "last_recharge_date": { "name": "Last recharge date" }
     }
